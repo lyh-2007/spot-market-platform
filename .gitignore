@@ -1,6 +1,7 @@
 # 编译与运行产物
 *.obj
 *.o
+*.exe
 *.log
 .vs/
 node_modules/
