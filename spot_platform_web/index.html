@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电力现货市场出清仿真平台</title>
+<style>
+  :root{
+    --bg:#f7f9fb; --panel:#ffffff; --line:#e3e8f0; --line-soft:#edf1f6;
+    --text:#0f172a; --text-dim:#334155; --text-mute:#475569;
+    --cyan:#2563eb; --mint:#16a34a; --amber:#dc2626; --red:#2563eb;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Helvetica Neue",Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6}
+
+  .topbar{position:sticky;top:0;z-index:100;display:flex;justify-content:space-between;align-items:center;gap:24px;padding:13px 28px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .brand-title{font-size:15px;font-weight:600}
+  .role-tabs{display:flex;border:1px solid var(--line)}
+  .role-tabs button{appearance:none;border:0;background:transparent;color:var(--text-mute);font-family:var(--sans);font-size:12px;padding:7px 16px;cursor:pointer;border-right:1px solid var(--line)}
+  .role-tabs button:last-child{border-right:0}
+  .role-tabs button:hover{color:var(--text)}
+  .role-tabs button.active{background:var(--text);color:#fff;font-weight:600}
+
+  main{max-width:1680px;margin:0 auto;padding:24px 28px;display:grid;grid-template-columns:repeat(12,1fr);gap:20px;align-items:start}
+  section{min-width:0}
+  .span-12{grid-column:span 12}
+  .span-7{grid-column:span 7}
+  .span-6{grid-column:span 6}
+  .span-5{grid-column:span 5}
+  @media(max-width:1100px){main{grid-template-columns:1fr}.span-12,.span-7,.span-6,.span-5{grid-column:1/-1}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);padding:18px 20px 16px}
+  .panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+  .panel-title{font-size:13px;font-weight:600}
+
+  .kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+  @media(max-width:960px){.kpi-strip{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);padding:14px 18px 12px}
+  .kpi-label{font-size:11px;color:var(--text-mute);margin-bottom:6px}
+  .kpi-value{font-family:var(--mono);font-size:26px;font-weight:600;line-height:1.15}
+  .kpi-value small{font-size:11px;font-weight:400;color:var(--text-mute);margin-left:5px}
+
+  .chart-wrap{position:relative;width:100%}
+  canvas.chart{display:block;width:100%}
+  .chart-tip{position:absolute;pointer-events:none;display:none;z-index:20;background:#fff;border:1px solid #c3ccd9;padding:8px 11px;font-family:var(--mono);font-size:11px;line-height:1.7;color:var(--text);white-space:nowrap;box-shadow:0 6px 24px rgba(15,23,42,.14)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:10px;height:10px;flex:none}
+
+  .slot-ctl{display:flex;align-items:center;gap:16px;margin:4px 0 12px}
+  .slot-ctl input[type=range]{flex:1;appearance:none;-webkit-appearance:none;height:2px;background:#d3dbe6;outline:none}
+  .slot-ctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--text);border:2px solid #fff;cursor:pointer}
+  .slot-ctl input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--text);border:2px solid #fff;cursor:pointer}
+  .slot-readout{font-family:var(--mono);font-size:13px;color:var(--text);min-width:210px;text-align:right}
+  .slot-readout b{font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:11px;color:var(--text-mute);font-weight:500;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:7px 10px;border-bottom:1px solid var(--line-soft)}
+  tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:rgba(15,23,42,.03)}
+  td.num,th.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10px;padding:1px 7px;border:1px solid var(--line);color:var(--text-dim)}
+  .tables-2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media(max-width:960px){.tables-2{grid-template-columns:1fr}}
+  .sub-head{font-size:12px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+
+  /* 个体选择器：仅发电侧/用户侧显示 */
+  .entity-bar{display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border:1px solid var(--line)}
+  body[data-role="gen"] .entity-bar, body[data-role="con"] .entity-bar{display:flex}
+  .entity-bar .eb-label{font-size:12px;color:var(--text-mute)}
+  .entity-bar button{appearance:none;border:1px solid var(--line);background:transparent;color:var(--text-mute);font-family:var(--sans);font-size:12px;padding:5px 14px;cursor:pointer}
+  .entity-bar button:hover{color:var(--text)}
+  .entity-bar button.active{background:var(--text);color:#fff;font-weight:600;border-color:var(--text)}
+
+  /* 选中具体主体后隐藏三个整体视角图表面板 */
+  body.entity-picked .entity-hide{display:none}
+
+  /* 可编辑申报表与导入按钮 */
+  .cell-in{width:84px;font-family:var(--mono);font-size:12px;text-align:right;padding:2px 6px;border:1px solid var(--line);background:#fff;color:var(--text)}
+  .cell-in:focus{outline:none;border-color:var(--text)}
+  .row-op{appearance:none;border:1px solid var(--line);background:transparent;color:var(--text-mute);font-size:11px;padding:1px 8px;cursor:pointer}
+  .row-op:hover{color:var(--text);border-color:var(--text)}
+  .calc-status{font-size:12px;font-weight:400;color:var(--text-mute);margin-left:12px}
+  .imp-btn{appearance:none;border:1px solid var(--line);background:transparent;color:var(--text-mute);font-family:var(--sans);font-size:12px;padding:5px 12px;cursor:pointer;margin-left:8px}
+  .imp-btn:hover{color:var(--text);border-color:var(--text)}
+
+  body[data-role="gen"] .role-con-only,
+  body[data-role="con"] .role-gen-only{display:none}
+</style>
+</head>
+<body data-role="center">
+
+<header class="topbar">
+  <div class="brand-title">电力现货市场出清仿真平台</div>
+  <nav class="role-tabs" id="roleTabs">
+    <button data-role="center" class="active">交易中心</button>
+    <button data-role="gen">发电侧</button>
+    <button data-role="con">用户侧</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 个体选择器（发电侧/用户侧） -->
+  <section class="entity-bar span-12" id="entityBar"></section>
+
+  <!-- 关键指标 -->
+  <section class="kpi-strip span-12" id="kpiStrip"></section>
+
+  <!-- 96 时段出清价曲线 -->
+  <section class="panel span-12">
+    <div class="panel-head">
+      <div class="panel-title">96 时段统一出清价曲线</div>
+    </div>
+    <div class="chart-wrap">
+      <canvas class="chart" id="priceChart" height="300"></canvas>
+      <div class="chart-tip" id="priceTip"></div>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--cyan)"></i>出清价（边际机组报价）</span>
+      <span><i class="sw" style="background:rgba(37,99,235,.15)"></i>低谷 00:00–07:00 / 23:00–24:00</span>
+      <span><i class="sw" style="background:rgba(220,38,38,.15)"></i>高峰 18:00–22:00</span>
+    </div>
+  </section>
+
+  <!-- 供需阶梯交叉 -->
+    <section class="panel entity-hide span-7">
+      <div class="panel-head">
+        <div class="panel-title">供需阶梯交叉</div>
+      </div>
+      <div class="slot-ctl">
+        <input type="range" id="slotSlider" min="0" max="95" value="80" step="1">
+        <div class="slot-readout" id="slotReadout"></div>
+      </div>
+      <div class="chart-wrap">
+        <canvas class="chart" id="ladderChart" height="320"></canvas>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--mint)"></i>供给台阶（发电申报）</span>
+        <span><i class="sw" style="background:var(--amber)"></i>需求台阶（用户申报）</span>
+        <span><i class="sw" style="background:var(--red)"></i>出清价线</span>
+      </div>
+    </section>
+
+    <section class="panel span-5">
+      <div class="panel-head">
+        <div class="panel-title">时段中标构成</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas class="chart" id="mixChart" height="260"></canvas>
+      </div>
+      <div class="legend role-gen-only" id="mixLegendGen"></div>
+      <div class="legend role-con-only" id="mixLegendCon"></div>
+    </section>
+
+  <!-- 日结算收支对比 -->
+    <section class="panel entity-hide span-6">
+      <div class="panel-head">
+        <div class="panel-title">日结算收支对比</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas class="chart" id="settleChart" height="300"></canvas>
+      </div>
+    </section>
+
+    <section class="panel entity-hide span-6">
+      <div class="panel-head">
+        <div class="panel-title">二次报价曲线出清</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas class="chart" id="quadChart" height="300"></canvas>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--text)"></i>供给曲线（二次报价 C(Q)）</span>
+        <span><i class="sw" style="background:var(--amber)"></i>需求折线（用户分段申报）</span>
+        <span><i class="sw" style="background:var(--cyan)"></i>出清点</span>
+      </div>
+      <div id="quadSteps" style="margin-top:12px;font-family:var(--mono);font-size:11.5px;line-height:2;color:var(--text-dim)"></div>
+    </section>
+
+  <!-- 双侧分段申报数据 -->
+  <section class="panel span-12" id="bidPanel">
+    <div class="panel-head">
+      <div class="panel-title">双侧分段申报数据（可直接编辑，改完由后端 C++ 引擎重新出清）<span class="calc-status" id="calcStatus"></span></div>
+      <div>
+        <button class="imp-btn" id="impGenBtn">导入发电侧 CSV</button>
+        <button class="imp-btn" id="impConBtn">导入用户侧 CSV</button>
+        <button class="imp-btn" id="resetBtn">恢复默认数据</button>
+        <input type="file" id="impGenFile" accept=".csv" hidden>
+        <input type="file" id="impConFile" accept=".csv" hidden>
+      </div>
+    </div>
+    <div class="tables-2">
+      <div class="role-gen-only">
+        <div class="sub-head">发电侧申报（全时段一致）</div>
+        <table id="genBidTable"></table>
+      </div>
+      <div class="role-con-only">
+        <div class="sub-head">用户侧申报（按峰谷分型变化）</div>
+        <table id="conBidTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 时段申报与中标明细（随滑块联动） -->
+  <section class="panel span-6">
+    <div class="panel-head">
+      <div class="panel-title">时段申报与中标明细</div>
+      <div class="slot-readout" id="slotTableReadout"></div>
+      <button class="imp-btn" id="dlSlotBtn">下载明细 CSV</button>
+    </div>
+    <table id="slotTable"></table>
+  </section>
+
+  <!-- 全天结算账单 -->
+  <section class="panel span-6">
+    <div class="panel-head">
+      <div class="panel-title">全天结算账单</div>
+    </div>
+    <div class="tables-2">
+      <div class="role-gen-only">
+        <div class="sub-head">发电侧账单（售电收入）<button class="imp-btn" id="dlGenBillBtn">下载 CSV</button></div>
+        <table id="genBillTable"></table>
+      </div>
+      <div class="role-con-only">
+        <div class="sub-head">用户侧账单（购电支出）<button class="imp-btn" id="dlConBillBtn">下载 CSV</button></div>
+        <table id="conBillTable"></table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ==================== 数据层 ==================== */
+
+/* 发电侧分段申报（全部时段一致） */
+let GEN_BIDS = [
+  {name:"电厂1", short:"电厂1", segs:[[150,200],[100,260],[50,330]]},
+  {name:"电厂2", short:"电厂2", segs:[[120,400],[100,480],[80,560]]},
+  {name:"电厂3", short:"电厂3", segs:[[60,620],[40,700]]},
+];
+/* 用户侧分段申报（按峰谷分型） */
+let CON_BIDS = {
+  "低谷":[
+    {name:"用户1", short:"用户1", segs:[[150,800],[50,600]]},
+    {name:"用户2", short:"用户2", segs:[[80,700]]},
+  ],
+  "平段":[
+    {name:"用户1", short:"用户1", segs:[[250,850],[80,650]]},
+    {name:"用户2", short:"用户2", segs:[[100,780],[40,600]]},
+  ],
+  "高峰":[
+    {name:"用户1", short:"用户1", segs:[[350,900],[100,700]]},
+    {name:"用户2", short:"用户2", segs:[[150,880],[50,650]]},
+  ],
+};
+
+/* ==================== 与后端的接口 ====================
+   前端不做任何出清/结算运算：申报数据 POST 给后端，由 C++ 引擎（spot_platform --web-io）
+   计算后返回全部结果；所有图表与表格只负责渲染。 */
+function dayPart(t){ if(t<28||t>=92) return "低谷"; if(72<=t && t<88) return "高峰"; return "平段"; }
+
+let CLEARING = [];                       /* 96 时段出清结果（含各主体中标量/金额/边际机组） */
+let SETTLEMENT = [];                     /* 各主体全天收支 */
+let BILLS = {gen: [], con: []};          /* 主体 × 峰平谷账单（含合计行） */
+let TOTALS = {genIn: 0, conOut: 0};      /* 发电收入 / 用户支出合计 */
+let KPI = {};                            /* 分型均价 / 峰谷价差 / 出清成功率 */
+let QUAD_RES = null;                     /* 二次曲线出清结果（三档负荷） */
+const DEFAULT_DATA = JSON.parse(JSON.stringify({GEN_BIDS, CON_BIDS}));
+const PART_COLOR = {"低谷":"#2563eb","平段":"#16a34a","高峰":"#dc2626"};
+
+function setStatus(msg){
+  const el = document.getElementById("calcStatus");
+  if(el) el.textContent = msg;
+}
+
+/* 申报变更后：发给后端重新出清并刷新全部视图；连续编辑时只认最后一次响应 */
+let reqSeq = 0;
+async function refreshAll(){
+  const my = ++reqSeq;
+  const list = entityList();
+  if(selEntity !== "全部" && !list.includes(selEntity)){
+    selEntity = "全部";
+    document.body.classList.remove("entity-picked");
+  }
+  setStatus("计算中…");
+  let data;
+  try{
+    const res = await fetch("/api/clear", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({genBids: GEN_BIDS, conBids: CON_BIDS}),
+    });
+    data = await res.json();
+  }catch(e){
+    if(my === reqSeq) setStatus("无法连接后端计算服务（请先运行 npm run dev）");
+    return;
+  }
+  if(my !== reqSeq) return;
+  if(data.error){ setStatus("出清失败：" + data.error); return; }
+  CLEARING = data.clearing; SETTLEMENT = data.settlement; BILLS = data.bills;
+  TOTALS = data.settleTotals; KPI = data.kpi; QUAD_RES = data.quad;
+  setStatus("");
+  renderKPI(); renderTables(); renderBills(); buildEntityBar(); renderMixLegend();
+  drawSettle(); renderQuadSteps(); updateSlot(selT);
+}
+
+/* 二次报价曲线参数由后端结果 QUAD_RES 携带（a/b/c/qMax 与 C++ 进阶模块一致） */
+
+const COLOR = {
+  cyan:"#2563eb", mint:"#16a34a", amber:"#dc2626", red:"#2563eb",
+  grid:"#e5eaf1", axis:"#c3ccd9", txt:"#1e293b", mute:"#475569", ink:"#0f172a",
+};
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+const SLOT_H = 0.25; /* 15 分钟 = 0.25 小时 */
+/* 主体系列配色（红绿蓝起，主体增多时循环扩展） */
+const SERIES = ["#2563eb","#16a34a","#dc2626","#9333ea","#ea580c","#0d9488","#be185d","#4d7c0f"];
+
+/* ==================== 工具 ==================== */
+function fitCanvas(cv){
+  const dpr = window.devicePixelRatio || 1;
+  /* 逻辑高度首次从 HTML 属性读取并缓存，避免物理像素写回后重绘时高度滚雪球 */
+  if(!cv.dataset.logicalH) cv.dataset.logicalH = cv.getAttribute("height");
+  const H = parseInt(cv.dataset.logicalH, 10);
+  cv.style.height = H + "px";
+  const W = cv.clientWidth;
+  cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  return {ctx, W, H};
+}
+function fmt(n, d=0){ return n.toLocaleString("zh-CN",{minimumFractionDigits:d, maximumFractionDigits:d}); }
+/* 与 C++ printf("%.2f") 一致的“半进偶”舍入，避免 JS 半上舍入与 CSV 差 0.01 */
+function fmtEven(v, d=2){
+  const f = Math.pow(10, d), x = v * f, fl = Math.floor(x);
+  if (Math.abs(x - fl - 0.5) < 1e-9) return fmt((fl % 2 === 0 ? fl : fl + 1) / f, d);
+  return fmt(Math.round(x) / f, d);
+}
+function hgrid(ctx, W, H, pad, yMin, yMax, rows){
+  ctx.strokeStyle = COLOR.grid; ctx.lineWidth = 1;
+  ctx.fillStyle = COLOR.mute; ctx.font = "10px "+MONO; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for(let i=0;i<=rows;i++){
+    const v = yMin + (yMax-yMin)*i/rows;
+    const y = pad.t + (H-pad.t-pad.b)*(1 - i/rows);
+    ctx.beginPath(); ctx.moveTo(pad.l, y+.5); ctx.lineTo(W-pad.r, y+.5); ctx.stroke();
+    ctx.fillText(fmt(v), pad.l-8, y);
+  }
+  return v => pad.t + (H-pad.t-pad.b)*(1 - (v-yMin)/(yMax-yMin));
+}
+
+/* ==================== 关键指标（数值来自后端） ==================== */
+function renderKPI(){
+  const kpis = [
+    {label:"低谷时段均价", v:KPI.low ?? null,    unit:"元/MWh"},
+    {label:"平段均价",     v:KPI.mid ?? null,    unit:"元/MWh"},
+    {label:"高峰时段均价", v:KPI.high ?? null,   unit:"元/MWh"},
+    {label:"峰谷价差",     v:KPI.spread ?? null, unit:"元/MWh"},
+    {label:"出清成功率",   v:KPI.success != null ? Math.round(KPI.success) : null, unit:"%"},
+  ];
+  document.getElementById("kpiStrip").innerHTML = kpis.map(k =>
+    `<div class="kpi">
+       <div class="kpi-label">${k.label}</div>
+       <div class="kpi-value">${typeof k.v==="number"?fmt(k.v):(k.v==null?"—":k.v)}<small>${k.unit}</small></div>
+     </div>`).join("");
+}
+
+/* ==================== 主图：96 时段出清价 ==================== */
+let hoverT = -1, selT = 80;
+const priceCv = () => document.getElementById("priceChart");
+
+function drawPrice(){
+  const cv = priceCv();
+  const {ctx, W, H} = fitCanvas(cv);
+  if(!CLEARING.length) return;   /* 后端尚未返回结果 */
+  const pad = {l:56, r:16, t:14, b:26};
+  /* 纵轴随出清价自适应（编辑申报后价格可能超出默认区间） */
+  const prices = CLEARING.filter(x => x.status !== "不交叉").map(x => x.price);
+  const pLo = prices.length ? Math.min(...prices) : 200;
+  const pHi = prices.length ? Math.max(...prices) : 700;
+  const yMin = Math.floor(pLo*0.9/10)*10, yMax = Math.ceil(pHi*1.08/10)*10;
+  const xOf = i => pad.l + (W-pad.l-pad.r) * i/(CLEARING.length-1);
+  const yOf = hgrid(ctx, W, H, pad, yMin, yMax, 7);
+
+  /* 峰谷背景色带 */
+  const band = (i0, i1, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(xOf(i0), pad.t, xOf(i1)-xOf(i0), H-pad.t-pad.b);
+  };
+  band(0, 27, "rgba(37,99,235,.06)");
+  band(92, 95, "rgba(37,99,235,.06)");
+  band(72, 87, "rgba(220,38,38,.07)");
+  ctx.fillStyle = COLOR.mute; ctx.font = "9px "+MONO; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  ctx.fillText("低谷", xOf(13), pad.t+4);
+  ctx.fillText("低谷", xOf(93), pad.t+4);
+  ctx.fillText("高峰", xOf(79), pad.t+4);
+
+  /* 阶梯价格曲线（出清价逐时段恒定） */
+  ctx.beginPath();
+  CLEARING.forEach((s,i) => {
+    const x = xOf(i), y = yOf(s.price);
+    if(i===0) ctx.moveTo(x,y);
+    else { ctx.lineTo(x, yOf(CLEARING[i-1].price)); ctx.lineTo(x,y); }
+  });
+  ctx.strokeStyle = COLOR.cyan; ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  /* X 轴时间刻度（每 4 小时） */
+  ctx.fillStyle = COLOR.mute; ctx.font = "10px "+MONO; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for(let i=0;i<96;i+=16) ctx.fillText(CLEARING[i].time, xOf(i), H-pad.b+8);
+  ctx.textAlign = "right";
+  ctx.fillText("24:00", W-pad.r, H-pad.b+8);
+
+  /* 悬停十字线 */
+  if(hoverT >= 0){
+    const x = xOf(hoverT);
+    ctx.strokeStyle = "rgba(15,23,42,.3)"; ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H-pad.b); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  /* 滑块选中时段 marker */
+  if(selT >= 0){
+    const s = CLEARING[selT], x = xOf(selT), y = yOf(s.price);
+    ctx.fillStyle = COLOR.amber;
+    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI*2); ctx.fill();
+  }
+}
+</script>
+
+<script>
+/* ==================== 供需阶梯交叉图 ==================== */
+function buildLadder(t){
+  const s = CLEARING[t];
+  const supply = [];
+  GEN_BIDS.forEach(g => g.segs.forEach(([mw,p]) => supply.push({mw, p, who:g.name})));
+  supply.sort((a,b) => a.p - b.p);
+  const demand = [];
+  (CON_BIDS[s.part]||[]).forEach(u => u.segs.forEach(([mw,p]) => demand.push({mw, p, who:u.name})));
+  demand.sort((a,b) => b.p - a.p);
+  let acc = 0; const sSteps = supply.map(d => { const r = {x0:acc, x1:acc+d.mw, ...d}; acc += d.mw; return r; });
+  acc = 0;      const dSteps = demand.map(d => { const r = {x0:acc, x1:acc+d.mw, ...d}; acc += d.mw; return r; });
+  const marginal = s.marg ? {who:s.marg.who, p:s.marg.p} : null; /* 边际机组由后端给出 */
+  return {s, sSteps, dSteps, marginal};
+}
+
+function drawLadder(){
+  const cv = document.getElementById("ladderChart");
+  const {ctx, W, H} = fitCanvas(cv);
+  if(!CLEARING[selT]) return;    /* 后端尚未返回结果 */
+  const {s, sSteps, dSteps, marginal} = buildLadder(selT);
+  const pad = {l:52, r:14, t:30, b:26};
+  /* 坐标范围随当前申报自适应 */
+  const supTot = sSteps.length ? sSteps[sSteps.length-1].x1 : 0;
+  const demTot = dSteps.length ? dSteps[dSteps.length-1].x1 : 0;
+  const allP = [...sSteps.map(x=>x.p), ...dSteps.map(x=>x.p)];
+  if(s.status !== "不交叉") allP.push(s.price);
+  const xMax = Math.max(supTot, demTot, 100)*1.15;
+  const yMin = allP.length ? Math.min(...allP)*0.6 : 0;
+  const yMax = (allP.length ? Math.max(...allP) : 500)*1.15;
+  const xStep = Math.max(50, Math.ceil(xMax/7/50)*50);
+  const xOf = q => pad.l + (W-pad.l-pad.r) * q/xMax;
+  const yOf = hgrid(ctx, W, H, pad, yMin, yMax, 8);
+  ctx.fillStyle = COLOR.mute; ctx.font = "9.5px "+MONO; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for(let q=0;q<=xMax;q+=xStep) ctx.fillText(fmt(q), xOf(q), H-pad.b+7);
+  ctx.fillText("MW", W-pad.r, pad.t-16);
+
+  /* 出清价水平线 */
+  ctx.strokeStyle = COLOR.red; ctx.lineWidth = 1.2; ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l, yOf(s.price)+.5); ctx.lineTo(xOf(s.qty), yOf(s.price)+.5); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const drawSteps = (steps, color, endUp) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    steps.forEach((st,i) => {
+      const y = yOf(st.p);
+      if(i===0) ctx.moveTo(xOf(st.x0), y); else ctx.lineTo(xOf(st.x0), y);
+      ctx.lineTo(xOf(st.x1), y);
+    });
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    steps.forEach(st => {
+      ctx.beginPath(); ctx.moveTo(xOf(st.x1), yOf(st.p));
+      const nxt = steps.find(o => o.x0 === st.x1);
+      /* 末段收尾：供给侧向上延伸（表示价格继续上升），需求侧向下落到底部 */
+      if(nxt) ctx.lineTo(xOf(st.x1), yOf(nxt.p)); else ctx.lineTo(xOf(st.x1), yOf(endUp ? yMax : yMin));
+      ctx.stroke();
+    });
+    /* 段标签（宽度足够时） */
+    ctx.font = "9px "+MONO; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    steps.forEach(st => {
+      if(xOf(st.x1)-xOf(st.x0) > 42){
+        ctx.fillStyle = COLOR.txt;
+        ctx.fillText(`${st.who} ${st.p}`, xOf((st.x0+st.x1)/2), yOf(st.p)-4);
+      }
+    });
+  };
+  drawSteps(sSteps, COLOR.mint, true);
+  drawSteps(dSteps, COLOR.amber, false);
+
+  if(s.status !== "不交叉" && marginal){
+    /* 出清量竖线 + 交叉点 */
+    ctx.strokeStyle = COLOR.cyan; ctx.lineWidth = 1.2; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(xOf(s.qty)+.5, yOf(s.price)); ctx.lineTo(xOf(s.qty)+.5, H-pad.b); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = COLOR.red;
+    ctx.beginPath(); ctx.arc(xOf(s.qty), yOf(s.price), 5, 0, Math.PI*2); ctx.fill();
+
+    /* 交叉点标注 */
+    ctx.font = "600 11px "+MONO; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillStyle = COLOR.ink;
+    ctx.fillText(`出清价 ${fmt(s.price)} 元/MWh`, xOf(s.qty)-8, yOf(s.price)-8);
+    ctx.fillText(`出清量 ${fmt(s.qty)} MW`, xOf(s.qty)-8, yOf(s.price)+18);
+
+    /* 边际机组 */
+    ctx.font = "10.5px "+MONO; ctx.textBaseline = "top"; ctx.textAlign = "left";
+    ctx.fillStyle = COLOR.txt;
+    ctx.fillText(`边际机组：${marginal.who}，报价 ${fmt(marginal.p)} 元/MWh`, pad.l, pad.t-20);
+  } else {
+    /* 供需报价不交叉：该时段不出清 */
+    ctx.font = "10.5px "+MONO; ctx.textBaseline = "top"; ctx.textAlign = "left";
+    ctx.fillStyle = COLOR.mute;
+    ctx.fillText("供需报价不交叉，该时段不出清", pad.l, pad.t-20);
+  }
+}
+
+/* ==================== 时段中标构成 ==================== */
+function drawMix(){
+  const cv = document.getElementById("mixChart");
+  const {ctx, W, H} = fitCanvas(cv);
+  const s = CLEARING[selT];
+  if(!s) return;                 /* 后端尚未返回结果 */
+  const gens = GEN_BIDS.map((g,i) => ({label:g.name, v:s.g[i]||0, c:SERIES[i%SERIES.length]})).filter(it => entOK(it.label));
+  const cons = (CON_BIDS[s.part]||[]).map((u,i) => ({label:u.name, v:s.u[i]||0, c:SERIES[i%SERIES.length]})).filter(it => entOK(it.label));
+  const gTot = gens.reduce((a,it)=>a+it.v,0), uTot = cons.reduce((a,it)=>a+it.v,0);
+
+  /* 头部信息区 */
+  ctx.font = "9.5px "+MONO; ctx.fillStyle = COLOR.mute; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.fillText(`时段 ${String(s.t).padStart(2,"0")}，${s.time}，${s.part}`, 4, 16);
+  ctx.font = "600 30px "+MONO; ctx.fillStyle = COLOR.ink;
+  ctx.fillText(fmt(s.price), 4, 50);
+  const priceW = ctx.measureText(fmt(s.price)).width;
+  ctx.font = "10px "+MONO; ctx.fillStyle = COLOR.mute;
+  ctx.fillText("元/MWh，统一出清价", 4 + priceW + 12, 46);
+  ctx.textAlign = "right";
+  ctx.font = "600 20px "+MONO; ctx.fillStyle = COLOR.ink;
+  ctx.fillText(fmt(s.qty)+" MW", W-4, 44);
+  ctx.font = "9.5px "+MONO; ctx.fillStyle = COLOR.mute;
+  ctx.fillText(`出清量，${s.status}，电量 ${fmt(s.qty*SLOT_H,1)} MWh`, W-4, 62);
+
+  /* 两条堆叠横条（按角色只画对应侧；单侧时垂直居中） */
+  const barMax = Math.max(gTot, uTot, 1);
+  const x0 = 4, x1 = W-64;
+  const barW = v => (x1-x0) * v/barMax;
+  const role = document.body.dataset.role;
+  const rowsToDraw = [];
+  if(role !== "con") rowsToDraw.push({title:"发电侧中标出力", items:gens, tot:gTot});
+  if(role !== "gen") rowsToDraw.push({title:"用户侧成交负荷", items:cons, tot:uTot});
+  const rowY = rowsToDraw.length === 1 ? [150] : [96, 196];
+  const row = (y, title, items, tot) => {
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.font = "9.5px "+MONO; ctx.fillStyle = COLOR.mute;
+    ctx.fillText(title, x0, y-8);
+    let x = x0;
+    items.forEach(it => {
+      const w = barW(it.v);
+      if(w > 0.3){
+        ctx.fillStyle = it.c;
+        ctx.fillRect(x, y, Math.max(w-1.5, 0), 34);
+        if(w > 58){
+          ctx.fillStyle = "#ffffff"; ctx.font = "600 10px "+MONO;
+          ctx.fillText(`${it.label} ${fmt(it.v)}`, x+7, y+21);
+        } else if(w > 4){
+          ctx.fillStyle = COLOR.txt; ctx.font = "10px "+MONO;
+          ctx.fillText(fmt(it.v), x+w/2, y+50);
+        }
+        x += w;
+      }
+    });
+    if(items.every(it => it.v === 0)){
+      ctx.strokeStyle = COLOR.axis; ctx.setLineDash([3,3]);
+      ctx.strokeRect(x0+.5, y+.5, 40, 33);
+      ctx.setLineDash([]);
+      ctx.fillStyle = COLOR.mute; ctx.font = "10px "+MONO;
+      ctx.fillText("未中标 0", x0+6, y+21);
+    }
+    ctx.textAlign = "left"; ctx.font = "600 13px "+MONO; ctx.fillStyle = COLOR.txt;
+    ctx.fillText(fmt(tot)+" MW", x+10, y+22);
+  };
+  rowsToDraw.forEach((r, i) => row(rowY[i], r.title, r.items, r.tot));
+}
+
+/* ==================== 日结算收支对比 ==================== */
+function drawSettle(){
+  const cv = document.getElementById("settleChart");
+  const {ctx, W, H} = fitCanvas(cv);
+  const role = document.body.dataset.role;
+  let rows = SETTLEMENT.filter(r => entOK(r.name));
+  if(role === "gen") rows = rows.filter(r => r.side === "gen");
+  if(role === "con") rows = rows.filter(r => r.side === "con");
+
+  const pad = {l:132, r:16, t:12, b:40};
+  const plotW = W - pad.l - pad.r;
+  /* 金额轴随结果自适应（导入新申报后金额可能超出默认区间） */
+  const maxAmt = Math.max(3600000, ...SETTLEMENT.map(r => r.amount)) * 1.05;
+  let axisX;
+  if(role === "gen")      axisX = pad.l + 4;
+  else if(role === "con") axisX = W - pad.r - 4;
+  else                    axisX = pad.l + plotW*0.52;
+  const scale = v => (plotW*0.48) * v/maxAmt;
+
+  const rh = (H - pad.t - pad.b) / rows.length;
+  rows.forEach((r, i) => {
+    const y = pad.t + rh*i + rh/2;
+    const isGen = r.side === "gen";
+    const bw = scale(r.amount);
+    ctx.font = "11px "+MONO; ctx.fillStyle = COLOR.txt;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(r.name, 4, y);
+    ctx.fillStyle = isGen ? COLOR.mint : COLOR.amber;
+    if(isGen) ctx.fillRect(axisX, y-10, bw, 20);
+    else      ctx.fillRect(axisX-bw, y-10, bw, 20);
+    /* 金额 + 电量（外侧空间不足时收进条内） */
+    const amtTxt = fmt(r.amount)+" 元";
+    const subTxt = `${fmt(r.mwh)} MWh，${isGen?"售电收入":"购电支出"}`;
+    const needW = Math.max(amtTxt.length*7.2, subTxt.length*6.4) + 16;
+    const fitsOutside = isGen ? (axisX+bw+8+needW <= W-pad.r) : (axisX-bw-8-needW >= 2);
+    if(fitsOutside){
+      ctx.font = "600 11px "+MONO; ctx.fillStyle = COLOR.ink;
+      ctx.textAlign = isGen ? "left" : "right";
+      ctx.fillText(amtTxt, isGen ? axisX+bw+8 : axisX-bw-8, y);
+      ctx.font = "9.5px "+MONO; ctx.fillStyle = COLOR.mute;
+      ctx.fillText(subTxt, isGen ? axisX+bw+8 : axisX-bw-8, y+13);
+    } else {
+      ctx.font = "600 11px "+MONO; ctx.fillStyle = "#ffffff";
+      ctx.textAlign = isGen ? "right" : "left";
+      ctx.fillText(amtTxt, isGen ? axisX+bw-7 : axisX-bw+7, y);
+      ctx.font = "9.5px "+MONO;
+      ctx.fillText(subTxt, isGen ? axisX+bw-7 : axisX-bw+7, y+13);
+    }
+  });
+
+  /* 中心轴 */
+  ctx.strokeStyle = COLOR.axis; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(axisX+.5, pad.t-2); ctx.lineTo(axisX+.5, H-pad.b+6); ctx.stroke();
+
+  /* 合计（来自后端结算汇总；选中个体时取该主体的金额） */
+  const inSum  = TOTALS.genIn, outSum = TOTALS.conOut;
+  ctx.font = "10px "+MONO; ctx.textBaseline = "alphabetic";
+  if(role === "center"){
+    ctx.fillStyle = COLOR.txt;  ctx.textAlign = "right"; ctx.fillText(`← 用户支出合计 ${fmt(outSum)} 元`, axisX-8, H-16);
+    ctx.fillStyle = COLOR.txt;  ctx.textAlign = "left";  ctx.fillText(`发电收入合计 ${fmt(inSum)} 元 →`, axisX+8, H-16);
+    ctx.fillStyle = COLOR.mute; ctx.textAlign = "center";
+    ctx.fillText(`收支差额 ${fmt(inSum-outSum, 2)} 元`, W/2, H-2);
+  } else {
+    ctx.fillStyle = COLOR.mute; ctx.textAlign = "center";
+    const partSum = selEntity === "全部"
+      ? (role === "gen" ? TOTALS.genIn : TOTALS.conOut)
+      : (rows[0] ? rows[0].amount : 0);
+    const txt = role === "gen"
+      ? `发电收入合计 ${fmt(partSum)} 元`
+      : `用户支出合计 ${fmt(partSum)} 元`;
+    ctx.fillText(txt, W/2, H-8);
+  }
+}
+
+/* ==================== 二次报价曲线出清 ==================== */
+/* 与「供需阶梯交叉」同构：需求侧为用户分段报价折线（随滑块时段的峰/平/谷变化），
+   供给侧为二次曲线 C(Q)，交点即出清点：P* = C(Qd)，Qd 为该档总负荷 */
+function drawQuad(){
+  const cv = document.getElementById("quadChart");
+  const {ctx, W, H} = fitCanvas(cv);
+  const s = CLEARING[selT];
+  if(!s || !QUAD_RES) return;
+  /* 出清点（负荷/出清价/是否触顶）由后端计算；这里只画曲线与交点 */
+  const qp = QUAD_RES.parts.find(p => p.part === s.part);
+  const qd = qp.qd, pStar = qp.price;
+  const xMax = QUAD_RES.qMax;
+  const pad = {l:52, r:16, t:30, b:26};
+  const f = q => QUAD_RES.a*q*q + QUAD_RES.b*q + QUAD_RES.c;
+  const conPrices = (CON_BIDS[s.part]||[]).flatMap(u => u.segs.map(x=>x[1]));
+  const yMin = 150, yMax = Math.max(950, ...conPrices, pStar)*1.1;
+  const xOf = q => pad.l + (W-pad.l-pad.r) * q/xMax;
+  const yOf = hgrid(ctx, W, H, pad, yMin, yMax, 8);
+  ctx.fillStyle = COLOR.mute; ctx.font = "10px "+MONO; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for(let q=0;q<=xMax;q+=200) ctx.fillText(q, xOf(q), H-pad.b+8);
+  ctx.fillText("MW", W-pad.r, pad.t-16);
+
+  const mx = xOf(qd), my = yOf(pStar);
+
+  /* 容量上限竖线 */
+  ctx.strokeStyle = "rgba(100,116,139,.6)"; ctx.lineWidth = 1; ctx.setLineDash([2,3]);
+  ctx.beginPath(); ctx.moveTo(xOf(xMax)+.5, pad.t); ctx.lineTo(xOf(xMax)+.5, H-pad.b); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "9px "+MONO; ctx.fillStyle = COLOR.mute; ctx.textAlign = "right"; ctx.textBaseline = "top";
+  ctx.fillText("容量上限 "+fmt(xMax)+" MW", xOf(xMax)-4, pad.t+2);
+
+  /* 当前时段说明（与滑块联动） */
+  ctx.font = "10.5px "+MONO; ctx.fillStyle = COLOR.txt; ctx.textAlign = "left";
+  ctx.fillText(`当前时段 ${String(s.t).padStart(2,"0")}，${s.time}，${s.part}，负荷 ${fmt(qd)} MW`, pad.l, pad.t-20);
+
+  /* 供给：二次曲线 C(Q) */
+  ctx.beginPath();
+  for(let q=0;q<=xMax;q+=10){
+    const x = xOf(q), y = yOf(f(q));
+    q===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle = COLOR.ink; ctx.lineWidth = 2;
+  ctx.stroke();
+
+  /* 需求：用户分段报价折线（降序台阶，与供需阶梯交叉图同画法） */
+  const dem = [];
+  CON_BIDS[s.part].forEach(u => u.segs.forEach(([mw,p]) => dem.push({mw, p, who:u.name})));
+  dem.sort((a,b) => b.p - a.p);
+  let acc = 0;
+  const dSteps = dem.map(d => { const r = {x0:acc, x1:acc+d.mw, ...d}; acc += d.mw; return r; });
+  ctx.strokeStyle = COLOR.amber; ctx.lineWidth = 2; ctx.beginPath();
+  dSteps.forEach((st,i) => {
+    const y = yOf(st.p);
+    if(i===0) ctx.moveTo(xOf(st.x0), y); else ctx.lineTo(xOf(st.x0), y);
+    ctx.lineTo(xOf(st.x1), y);
+  });
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  dSteps.forEach(st => {
+    ctx.beginPath(); ctx.moveTo(xOf(st.x1), yOf(st.p));
+    const nxt = dSteps.find(o => o.x0 === st.x1);
+    if(nxt) ctx.lineTo(xOf(st.x1), yOf(nxt.p)); else ctx.lineTo(xOf(st.x1), yOf(yMin));
+    ctx.stroke();
+  });
+  /* 段标签（宽度足够时） */
+  ctx.font = "9px "+MONO; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+  dSteps.forEach(st => {
+    if(xOf(st.x1)-xOf(st.x0) > 42){
+      ctx.fillStyle = COLOR.txt;
+      ctx.fillText(`${st.who} ${st.p}`, xOf((st.x0+st.x1)/2), yOf(st.p)-4);
+    }
+  });
+
+  /* 出清点：需求末段垂线与供给曲线的交点 */
+  ctx.strokeStyle = COLOR.cyan; ctx.lineWidth = 1.2; ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l, my+.5); ctx.lineTo(mx, my+.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mx+.5, my); ctx.lineTo(mx+.5, H-pad.b); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = COLOR.cyan;
+  ctx.beginPath(); ctx.arc(mx, my, 5, 0, Math.PI*2); ctx.fill();
+  ctx.font = "600 11px "+MONO; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+  ctx.fillStyle = COLOR.ink;
+  ctx.fillText(`${fmt(pStar,2)} 元/MWh`, mx-8, my-8);
+  ctx.font = "10px "+MONO; ctx.fillStyle = COLOR.txt; ctx.textBaseline = "top";
+  ctx.fillText(`${fmt(qd)} MW`, mx-8, my+10);
+}
+
+/* 三档出清结果表（数值由后端二次曲线出清模块计算） */
+function renderQuadSteps(){
+  if(!QUAD_RES) return;
+  const rows = QUAD_RES.parts.map(p =>
+    `<tr><td><span class="tag" style="border-color:${PART_COLOR[p.part]};color:${PART_COLOR[p.part]}">${p.part}${p.capped?"（触顶）":""}</span></td>` +
+    `<td class="num">${fmt(p.qd)}</td><td class="num">${fmt(p.price,2)}</td>` +
+    `<td class="num">${fmtEven(p.fee,2)}</td></tr>`).join("");
+  document.getElementById("quadSteps").innerHTML =
+    `<table style="margin-top:4px;max-width:560px"><thead><tr><th>时段分型</th>` +
+    `<th class="num">负荷 MW</th><th class="num">出清价 元/MWh</th><th class="num">时段电费 元</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>`;
+}
+</script>
+
+<script>
+/* ==================== 个体选择 ==================== */
+/* selEntity 仅在发电侧/用户侧生效；交易中心恒为"全部" */
+let selEntity = "全部";
+function entityList(){
+  const role = document.body.dataset.role;
+  if(role === "gen") return ["全部", ...GEN_BIDS.map(g => g.name)];
+  if(role === "con") return ["全部", ...CON_BIDS["低谷"].map(u => u.name)];
+  return [];
+}
+function entOK(name){ return selEntity === "全部" || name === selEntity; }
+function buildEntityBar(){
+  const list = entityList();
+  document.getElementById("entityBar").innerHTML = list.length
+    ? `<span class="eb-label">选择主体</span>` +
+      list.map(n => `<button data-ent="${n}" class="${n===selEntity?"active":""}">${n}</button>`).join("")
+    : "";
+}
+function refreshEntityViews(){ drawMix(); drawSettle(); renderTables(); renderSlotTable(); renderBills(); }
+
+/* ==================== 中标构成图例（随主体增减） ==================== */
+function renderMixLegend(){
+  document.getElementById("mixLegendGen").innerHTML = GEN_BIDS.map((g,i) =>
+    `<span><i class="sw" style="background:${SERIES[i%SERIES.length]}"></i>${g.name}</span>`).join("");
+  document.getElementById("mixLegendCon").innerHTML = (CON_BIDS["低谷"]||[]).map((u,i) =>
+    `<span><i class="sw" style="background:${SERIES[i%SERIES.length]}"></i>${u.name}</span>`).join("");
+}
+
+/* ==================== 申报数据表（可编辑） ==================== */
+function numIn(side, ent, seg, field, val, part){
+  return `<input class="cell-in" type="number" min="0" step="any" value="${val}" ` +
+    `data-side="${side}" data-ent="${ent}" data-seg="${seg}" data-field="${field}"` +
+    (part ? ` data-part="${part}"` : "") + `>`;
+}
+function renderTables(){
+  let rows = [];
+  GEN_BIDS.forEach((g, gi) => {
+    if(!entOK(g.name)) return;
+    g.segs.forEach(([mw,p], si) => rows.push(
+      `<tr><td>${g.name}</td><td class="num">段 ${si+1}</td>` +
+      `<td class="num">${numIn("gen",gi,si,"mw",mw)}</td>` +
+      `<td class="num">${numIn("gen",gi,si,"p",p)}</td>` +
+      `<td class="num"><button class="row-op" data-act="del" data-side="gen" data-ent="${gi}" data-seg="${si}">×</button></td></tr>`));
+    rows.push(`<tr><td colspan="4"></td><td class="num">` +
+      `<button class="row-op" data-act="add" data-side="gen" data-ent="${gi}">＋ 添加段</button></td></tr>`);
+  });
+  document.getElementById("genBidTable").innerHTML =
+    `<thead><tr><th>电厂</th><th class="num">段号</th><th class="num">出力 MW</th><th class="num">报价 元/MWh</th><th></th></tr></thead><tbody>${rows.join("")}</tbody>`;
+
+  rows = [];
+  ["低谷","平段","高峰"].forEach(part => {
+    (CON_BIDS[part]||[]).forEach((u, ui) => {
+      if(!entOK(u.name)) return;
+      u.segs.forEach(([mw,p], si) => rows.push(
+        `<tr><td>${u.name}</td><td><span class="tag">${part}</span></td><td class="num">段 ${si+1}</td>` +
+        `<td class="num">${numIn("con",ui,si,"mw",mw,part)}</td>` +
+        `<td class="num">${numIn("con",ui,si,"p",p,part)}</td>` +
+        `<td class="num"><button class="row-op" data-act="del" data-side="con" data-part="${part}" data-ent="${ui}" data-seg="${si}">×</button></td></tr>`));
+      rows.push(`<tr><td colspan="5"></td><td class="num">` +
+        `<button class="row-op" data-act="add" data-side="con" data-part="${part}" data-ent="${ui}">＋ 添加段</button></td></tr>`);
+    });
+  });
+  document.getElementById("conBidTable").innerHTML =
+    `<thead><tr><th>用户</th><th>时段分型</th><th class="num">段号</th><th class="num">负荷 MW</th><th class="num">报价 元/MWh</th><th></th></tr></thead><tbody>${rows.join("")}</tbody>`;
+}
+
+/* ==================== CSV 导入 ==================== */
+/* 兼容两种格式：带表头（按列名定位）；无表头 5 列：名称,编号,时段,数量MW,报价。
+   时段=-1 表示全 96 时段通用；用户侧逐时段申报按峰平谷规则归型 */
+function parseBidCsv(text, side){
+  text = text.replace(/^\uFEFF/, "");
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if(!lines.length) throw new Error("文件为空");
+  let start = 0, col = {name:0, t:2, mw:3, p:4};
+  if(/名称|报价/.test(lines[0])){
+    const h = lines[0].split(",").map(x => x.trim());
+    col = {
+      name: h.findIndex(x => x.includes("名称")),
+      t:    h.findIndex(x => x.includes("时段")),
+      mw:   h.findIndex(x => x.includes("MW")),
+      p:    h.findIndex(x => x.includes("报价")),
+    };
+    if(Object.values(col).some(i => i < 0)) throw new Error("表头需包含：名称 / 时段 / 数量MW / 报价");
+    start = 1;
+  }
+  const rows = [];
+  for(let i = start; i < lines.length; i++){
+    const c = lines[i].split(",").map(x => x.trim());
+    const t = parseInt(c[col.t], 10), mw = parseFloat(c[col.mw]), p = parseFloat(c[col.p]);
+    if(!c[col.name] || isNaN(t) || !(mw > 0) || !(p >= 0)) continue;  // 跳过非法行
+    rows.push({name:c[col.name], t, mw, p});
+  }
+  if(!rows.length) throw new Error("未解析到有效申报行");
+
+  if(side === "gen"){
+    const used = rows.filter(r => r.t === -1);
+    if(!used.length) throw new Error("发电侧申报需为全时段通用（时段列填 -1）");
+    const map = new Map();
+    used.forEach(r => { if(!map.has(r.name)) map.set(r.name, []); map.get(r.name).push([r.mw, r.p]); });
+    GEN_BIDS = [...map].map(([name, segs]) => ({name, segs: segs.sort((a,b) => a[1]-b[1])}));
+    return used.length;
+  }
+  /* 用户侧：-1 → 三个分型通用；否则按 dayPart 归型；同名用户在各分型下对齐 */
+  const order = [], parts = {"低谷":{}, "平段":{}, "高峰":{}};
+  rows.forEach(r => {
+    if(!order.includes(r.name)) order.push(r.name);
+    (r.t === -1 ? ["低谷","平段","高峰"] : [dayPart(r.t)]).forEach(pt => {
+      (parts[pt][r.name] = parts[pt][r.name] || []).push([r.mw, r.p]);
+    });
+  });
+  CON_BIDS = {};
+  ["低谷","平段","高峰"].forEach(pt => {
+    CON_BIDS[pt] = order.map(name => ({name, segs: (parts[pt][name]||[]).sort((a,b) => b[1]-a[1])}));
+  });
+  return rows.length;
+}
+
+/* ==================== 时段申报与中标明细 ==================== */
+/* 中标 MW 与金额由后端返回；申报量/分段报价为输入数据展示；按当前角色过滤两侧行 */
+function slotRows(){
+  const s = CLEARING[selT];
+  if(!s) return [];
+  const role = document.body.dataset.role;
+  const rows = [];
+  GEN_BIDS.forEach((g,i) => {
+    rows.push({side:"发电", name:g.name,
+      bid:g.segs.reduce((a,[mw])=>a+mw,0),
+      price:g.segs.map(x=>fmt(x[1])).join(" / "),
+      win:s.g[i]||0, amt:(s.gAmt||[])[i]||0});
+  });
+  (CON_BIDS[s.part]||[]).forEach((u,i) => {
+    rows.push({side:"用户", name:u.name,
+      bid:u.segs.reduce((a,[mw])=>a+mw,0),
+      price:u.segs.map(x=>fmt(x[1])).join(" / "),
+      win:s.u[i]||0, amt:(s.uAmt||[])[i]||0});
+  });
+  return rows.filter(r =>
+    (role==="center" || (role==="gen"?r.side==="发电":r.side==="用户")) && entOK(r.name));
+}
+function renderSlotTable(){
+  const s = CLEARING[selT];
+  if(!s) return;
+  document.getElementById("slotTable").innerHTML =
+    `<thead><tr><th>主体</th><th>类型</th><th class="num">申报量 MW</th><th class="num">分段报价 元/MWh</th>` +
+    `<th class="num">中标 MW</th><th class="num">电量 MWh</th><th class="num">金额 元</th></tr></thead><tbody>` +
+    slotRows().map(r =>
+      `<tr><td>${r.name}</td><td>${r.side}</td><td class="num">${fmt(r.bid)}</td><td class="num">${r.price}</td>` +
+      `<td class="num">${fmt(r.win)}</td><td class="num">${fmt(r.win*SLOT_H,2)}</td>` +
+      `<td class="num">${fmt(r.amt,2)}</td></tr>`).join("") +
+    `</tbody>`;
+  document.getElementById("slotTableReadout").innerHTML =
+    `时段 ${String(s.t).padStart(2,"0")}，${s.time}，<b>${s.part}</b>`;
+}
+
+/* ==================== 全天结算账单（数据来自后端） ==================== */
+function renderBills(){
+  const build = (tableId, data) => {
+    const rows = data.map(r => r.part === "合计"
+      ? `<tr style="font-weight:600"><td>${r.name}</td><td>合计</td>` +
+        `<td class="num">${fmt(r.mwh,1)}</td><td class="num">${fmt(r.amt,2)}</td></tr>`
+      : `<tr><td>${r.name}</td><td><span class="tag">${r.part}</span></td>` +
+        `<td class="num">${fmt(r.mwh,1)}</td><td class="num">${fmt(r.amt,2)}</td></tr>`);
+    document.getElementById(tableId).innerHTML =
+      `<thead><tr><th>主体</th><th>时段分型</th><th class="num">电量 MWh</th><th class="num">金额 元</th></tr></thead>` +
+      `<tbody>${rows.join("")}</tbody>`;
+  };
+  build("genBillTable", BILLS.gen.filter(r => entOK(r.name)));
+  build("conBillTable", BILLS.con.filter(r => entOK(r.name)));
+}
+
+/* ==================== CSV 下载 ==================== */
+/* 加 BOM 使 Excel 直接识别 UTF-8 中文；数值原样输出不加分位符，便于二次计算 */
+function downloadCsv(filename, head, rows){
+  const esc = v => { v = String(v); return (/[",\n]/).test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; };
+  const text = "\uFEFF" + [head, ...rows].map(r => r.map(esc).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type:"text/csv;charset=utf-8"}));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ==================== 交互 ==================== */
+function updateSlot(t){
+  selT = t;
+  const s = CLEARING[t];
+  if(!s) return;  /* 后端尚未返回结果时不刷新 */
+  document.getElementById("slotReadout").innerHTML =
+    `时段 ${String(t).padStart(2,"0")}，${s.time}，<b>${s.part}</b>，${fmt(s.price)} 元/MWh`;
+  drawPrice(); drawLadder(); drawMix(); renderSlotTable(); drawQuad();
+}
+
+function bindEvents(){
+  document.getElementById("slotSlider").addEventListener("input", e => updateSlot(+e.target.value));
+
+  document.getElementById("roleTabs").addEventListener("click", e => {
+    const btn = e.target.closest("button"); if(!btn) return;
+    document.body.dataset.role = btn.dataset.role;
+    document.querySelectorAll("#roleTabs button").forEach(b => b.classList.toggle("active", b === btn));
+    selEntity = "全部";
+    document.body.classList.remove("entity-picked");
+    buildEntityBar();
+    refreshEntityViews();
+  });
+
+  document.getElementById("entityBar").addEventListener("click", e => {
+    const btn = e.target.closest("button"); if(!btn) return;
+    selEntity = btn.dataset.ent;
+    document.querySelectorAll("#entityBar button").forEach(b => b.classList.toggle("active", b === btn));
+    document.body.classList.toggle("entity-picked", selEntity !== "全部");
+    refreshEntityViews();
+  });
+
+  const cv = priceCv(), tip = document.getElementById("priceTip");
+  cv.addEventListener("mousemove", e => {
+    const rect = cv.getBoundingClientRect();
+    const padL = 56, padR = 16;
+    const frac = (e.clientX - rect.left - padL) / (rect.width - padL - padR);
+    const i = Math.round(frac * 95);
+    if(i < 0 || i > 95){ hoverT = -1; tip.style.display = "none"; drawPrice(); return; }
+    hoverT = i;
+    const s = CLEARING[i];
+    drawPrice();
+    tip.style.display = "block";
+    tip.innerHTML =
+      `<b>时段 ${String(s.t).padStart(2,"0")}，${s.time}</b>，${s.part}<br>` +
+      `出清价 <b>${fmt(s.price)}</b> 元/MWh<br>` +
+      `出清量 ${fmt(s.qty)} MW，${s.status}<br>` +
+      `<span style="color:var(--text-mute)">${GEN_BIDS.map((g,i)=>`${g.name} ${fmt(s.g[i]||0)}`).join(" / ")} MW</span>`;
+    const tx = Math.min(Math.max(e.clientX - rect.left + 14, 8), rect.width - 190);
+    const ty = Math.max(e.clientY - rect.top - 70, 8);
+    tip.style.left = tx + "px"; tip.style.top = ty + "px";
+  });
+  cv.addEventListener("mouseleave", () => { hoverT = -1; tip.style.display = "none"; drawPrice(); });
+  cv.addEventListener("click", () => {
+    if(hoverT >= 0){ document.getElementById("slotSlider").value = hoverT; updateSlot(hoverT); }
+  });
+
+  let raf;
+  window.addEventListener("resize", () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => { drawPrice(); drawLadder(); drawMix(); drawSettle(); drawQuad(); });
+  });
+
+  /* 申报表编辑：改数值 / 添加段 / 删除段，改完全页重新出清 */
+  const bidPanel = document.getElementById("bidPanel");
+  bidPanel.addEventListener("change", e => {
+    const inp = e.target.closest("input.cell-in"); if(!inp) return;
+    const v = parseFloat(inp.value);
+    if(!(v >= 0)){ alert("请输入不小于 0 的数值"); renderTables(); return; }
+    const seg = inp.dataset.field === "mw" ? 0 : 1;
+    if(inp.dataset.side === "gen")
+      GEN_BIDS[+inp.dataset.ent].segs[+inp.dataset.seg][seg] = v;
+    else
+      CON_BIDS[inp.dataset.part][+inp.dataset.ent].segs[+inp.dataset.seg][seg] = v;
+    refreshAll();
+  });
+  bidPanel.addEventListener("click", e => {
+    const btn = e.target.closest("button.row-op"); if(!btn) return;
+    const d = btn.dataset;
+    const segs = d.side === "gen" ? GEN_BIDS[+d.ent].segs : CON_BIDS[d.part][+d.ent].segs;
+    if(d.act === "del") segs.splice(+d.seg, 1);
+    else if(d.act === "add"){
+      const lastP = segs.length ? segs[segs.length-1][1] : 300;
+      segs.push([50, d.side === "gen" ? lastP+20 : Math.max(lastP-20, 0)]);
+    }
+    refreshAll();
+  });
+
+  /* CSV 导入 / 恢复默认 */
+  const importFile = (inputId, side) => {
+    const inp = document.getElementById(inputId);
+    inp.value = "";
+    inp.onchange = () => {
+      const file = inp.files[0]; if(!file) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        try {
+          const n = parseBidCsv(rd.result, side);
+          refreshAll();
+          alert(`已导入 ${n} 条${side==="gen"?"发电侧":"用户侧"}申报，全页已重新出清`);
+        } catch(err){ alert("导入失败：" + err.message); }
+      };
+      rd.readAsText(file, "utf-8");
+    };
+    inp.click();
+  };
+  document.getElementById("impGenBtn").addEventListener("click", () => importFile("impGenFile", "gen"));
+  document.getElementById("impConBtn").addEventListener("click", () => importFile("impConFile", "con"));
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    GEN_BIDS = JSON.parse(JSON.stringify(DEFAULT_DATA.GEN_BIDS));
+    CON_BIDS = JSON.parse(JSON.stringify(DEFAULT_DATA.CON_BIDS));
+    refreshAll();
+  });
+
+  /* 明细 / 账单下载：内容与页面当前显示一致（跟随角色与个体筛选） */
+  const r2 = x => Math.round(x*100)/100;
+  document.getElementById("dlSlotBtn").addEventListener("click", () => {
+    const s = CLEARING[selT];
+    if(!s) return;
+    const rows = slotRows().map(r =>
+      [s.t, s.time, s.part, s.price, r.name, r.side, r.bid, r.price, r.win, r2(r.win*SLOT_H), r2(r.amt)]);
+    downloadCsv(`时段中标明细_时段${String(s.t).padStart(2,"0")}_${s.time.replace(":","-")}.csv`,
+      ["时段","时间","分型","出清价 元/MWh","主体","类型","申报量 MW","分段报价 元/MWh","中标 MW","电量 MWh","金额 元"], rows);
+  });
+  const dlBill = (rows, fname) => () =>
+    downloadCsv(fname, ["主体","时段分型","电量 MWh","金额 元"],
+      rows().map(r => [r.name, r.part, r2(r.mwh), r2(r.amt)]));
+  document.getElementById("dlGenBillBtn").addEventListener("click", dlBill(() => BILLS.gen.filter(r => entOK(r.name)), "发电侧账单.csv"));
+  document.getElementById("dlConBillBtn").addEventListener("click", dlBill(() => BILLS.con.filter(r => entOK(r.name)), "用户侧账单.csv"));
+}
+
+/* ==================== 初始化：先渲染申报表，再请求后端出清 ==================== */
+bindEvents();
+renderTables();
+refreshAll();
+</script>
+</body>
+</html>
