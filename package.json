@@ -1,0 +1,9 @@
+{
+  "name": "spot-platform-web",
+  "private": true,
+  "version": "2.0.0",
+  "description": "电力现货市场出清仿真 · 可视化网页（前端纯渲染，出清/结算由后端调用 C++ 引擎计算）",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}
